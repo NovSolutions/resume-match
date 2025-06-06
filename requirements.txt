@@ -5,4 +5,4 @@ pydantic
 PyMuPDF
 numpy
 spacy
-relevanceai
+relevanceai==3.7.1
