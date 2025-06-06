@@ -5,3 +5,4 @@ pydantic
 PyMuPDF
 numpy
 spacy
+relevanceai
