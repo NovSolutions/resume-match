@@ -1,20 +1,22 @@
-# Resume Matcher (FastAPI)
+@app.post("/match")
+def match_resume(data: dict):
+    resume = data["resume"]
+    job = data["job"]
 
-A resume-job description matching API with PDF parsing, NLP (spaCy), and scoring.
+    client.datasets.documents.insert(
+        dataset_id="resume-matching",
+        documents=[
+            {"_id": "resume", "text": resume},
+            {"_id": "job", "text": job}
+        ]
+    )
 
-## 📦 API Endpoint
-`POST /match_resume`
+    match = client.datasets.vector.search(
+        dataset_id="resume-matching",
+        query_vector={"text": resume},
+        vector_fields=["text"],
+        filters={"_id": {"$eq": "job"}},
+        page_size=1
+    )
 
-### Form Fields:
-- `resume_file`: Upload a PDF
-- `job_title`: Text
-- `job_content`: Text
-
-### Response:
-```json
-{
-  "name": "John Doe",
-  "email": "john@example.com",
-  "match_score": 92.3,
-  "interview_scheduled": true
-}
+    return {"match_score": match["results"][0]["_score"]}
