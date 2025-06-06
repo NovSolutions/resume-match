@@ -3,6 +3,7 @@ services:
     name: resume-matching
     env: python
     buildCommand: pip install -r requirements.txt
+                  python -m spacy download en_core_web_sm
     startCommand: uvicorn main:app --host=0.0.0.0 --port=8000
     envVars:
       - key: RELEVANCE_AI_API_KEY
