@@ -1,54 +1,92 @@
 from fastapi import FastAPI, HTTPException
-from relevanceai import RelevanceClient
 import os
+import requests
 from typing import List
 
 app = FastAPI()
-client = RelevanceClient(api_key=os.environ["RELEVANCE_AI_API_KEY"])
 
+API_KEY = os.environ["RELEVANCE_AI_API_KEY"]
 DATASET_ID = "recruit-mvp"
+BASE_URL = "https://api.relevance.ai/v1"
+
+headers = {
+    "Authorization": f"Bearer {API_KEY}",
+    "Content-Type": "application/json"
+}
 
 @app.post("/job")
 def upload_job(job: dict):
-    job_doc = {
+    doc = {
         "_id": "job",
         "type": "job",
         "title": job["title"],
         "description": job["description"]
     }
-    client.datasets.documents.insert(DATASET_ID, [job_doc])
+    res = requests.post(
+        f"{BASE_URL}/datasets/{DATASET_ID}/documents/insert",
+        json={"documents": [doc]},
+        headers=headers
+    )
+    if not res.ok:
+        raise HTTPException(500, "Failed to insert job")
     return {"status": "job saved"}
 
 @app.post("/resumes")
 def upload_resumes(resumes: List[dict]):
-    docs = []
-    for r in resumes:
-        docs.append({
+    docs = [
+        {
             "_id": r["id"],
             "type": "resume",
             "name": r["name"],
             "skills": r["skills"],
             "text": r["text"]
-        })
-    client.datasets.documents.insert(DATASET_ID, docs)
+        }
+        for r in resumes
+    ]
+    res = requests.post(
+        f"{BASE_URL}/datasets/{DATASET_ID}/documents/insert",
+        json={"documents": docs},
+        headers=headers
+    )
+    if not res.ok:
+        raise HTTPException(500, "Failed to insert resumes")
     return {"status": f"{len(docs)} resumes uploaded"}
 
 @app.post("/match")
-def match_candidates():
-    job_doc = client.datasets.documents.list(DATASET_ID, filters={"_id": {"$eq": "job"}})
-    if not job_doc["documents"]:
+def match():
+    # get job description
+    res = requests.post(
+        f"{BASE_URL}/datasets/{DATASET_ID}/documents/list",
+        json={"filters": {"_id": {"$eq": "job"}}},
+        headers=headers
+    )
+    job_doc = res.json().get("documents", [])
+    if not job_doc:
         raise HTTPException(404, "Job not found")
 
-    job_text = job_doc["documents"][0]["description"]
+    job_text = job_doc[0]["description"]
 
-    result = client.datasets.vector.search(
-        dataset_id=DATASET_ID,
-        query_vector={"text": job_text},
-        vector_fields=["text"],
-        filters={"type": {"$eq": "resume"}},
-        page_size=5
+    search_payload = {
+        "query_vector": {"text": job_text},
+        "vector_fields": ["text"],
+        "filters": {"type": {"$eq": "resume"}},
+        "page_size": 5
+    }
+
+    match_res = requests.post(
+        f"{BASE_URL}/datasets/{DATASET_ID}/vector/search",
+        json=search_payload,
+        headers=headers
     )
-    return {"top_matches": result["results"]}
+
+    if not match_res.ok:
+        raise HTTPException(500, "Vector search failed")
+
+    return {"matches": match_res.json().get("results", [])}
+
+@app.get("/")
+def root():
+    return {"status": "MVP live via Relevance AI HTTP API"}
 
 @app.get("/")
 def root():
